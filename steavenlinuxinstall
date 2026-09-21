@@ -4,20 +4,81 @@ set -Eeuo pipefail
 IFS=$'\n\t'
 umask 077
 
-readonly DEFAULT_HOSTNAME=SteavenLinux DEFAULT_TIMEZONE=Africa/Cairo DEFAULT_LOCALE=en_US.UTF-8
-readonly DEFAULT_SECONDARY_LOCALE=ar_EG.UTF-8 DEFAULT_DESKTOP=gnome DEFAULT_USERNAME=steavengameryt
-ROOT_PASSWORD='' USER_PASSWORD=''
+# Define default system settings
+readonly DEFAULT_HOSTNAME="SteavenLinux"
+readonly DEFAULT_TIMEZONE="Africa/Cairo"
+readonly DEFAULT_LOCALE="en_US.UTF-8"
+readonly DEFAULT_SECONDARY_LOCALE="ar_EG.UTF-8"
+readonly DEFAULT_DESKTOP="gnome"
+readonly DEFAULT_USERNAME="steavengameryt"
 
-msg() { printf '\n=== %s ===\n\n' "$1"; }
-warn() { printf 'Warning: %s\n' "$1" >&2; }
-die() { printf 'Error: %s\n' "$1" >&2; exit 1; }
-on_exit() { local status=$?; unset ROOT_PASSWORD USER_PASSWORD; (( status == 0 )) || warn 'Installation stopped; mounts were left in place for recovery.'; }
+# Define default user and root passwords (leave blank for manual input)
+ROOT_PASSWORD=''
+USER_PASSWORD=''
+
+msg() {
+    printf '\n=== %s ===\n\n' "$1"
+}
+
+warn() {
+    printf 'Warning: %s\n' "$1" >&2
+}
+
+die() {
+    printf 'Error: %s\n' "$1" >&2
+    exit 1
+}
+
+on_exit() {
+    local status=$?
+    unset ROOT_PASSWORD USER_PASSWORD
+    if (( status == 0 )); then
+        printf 'Installation completed successfully.\n'
+    else
+        warn 'Installation stopped; mounts were left in place for recovery.'
+    fi
+}
 trap on_exit EXIT
 
-need() { command -v "$1" >/dev/null 2>&1 || die "Required command is missing: $1"; }
-prompt() { local value; read -r -p "$1 [$2]: " value; printf '%s\n' "${value:-$2}"; }
-yes_no() { local value; while true; do read -r -p "$1 [$2]: " value; case "${value:-$2}" in [Yy]|[Yy][Ee][Ss]) echo yes; return;; [Nn]|[Nn][Oo]) echo no; return;; *) warn 'Enter yes or no.';; esac; done; }
-partition_path() { [[ $1 =~ [0-9]$ ]] && printf '%sp%s\n' "$1" "$2" || printf '%s%s\n' "$1" "$2"; }
+need() {
+    if ! command -v "$1" >/dev/null 2>&1; then
+        die "Required command is missing: $1"
+    fi
+}
+
+prompt() {
+    local value
+    read -r -p "$1 [$2]: " value
+    printf '%s\n' "${value:-$2}"
+}
+
+yes_no() {
+    local value
+    while true; do
+        read -r -p "$1 [$2]: " value
+        case "${value:-$2}" in
+            [Yy]* | [Yy][Ee][Ss])
+                echo yes
+                return
+                ;;
+            [Nn]* | [Nn][Oo])
+                echo no
+                return
+                ;;
+            *)
+                warn 'Enter yes or no.'
+                ;;
+        esac
+    done
+}
+
+partition_path() {
+    if [[ $1 =~ [0-9]$ ]]; then
+        printf '%sp%s\n' "$1" "$2"
+    else
+        printf '%s%s\n' "$1" "$2"
+    fi
+}
 
 asset() {
     local here
@@ -30,7 +91,7 @@ asset() {
 validate_disk() {
     local disk source name mounted
     disk=$(readlink -f -- "$1") || die "Cannot resolve disk: $1"
-    [[ -b $disk && $(lsblk -dnro TYPE "$disk") == disk ]] || die 'Choose a whole disk such as /dev/sda or /dev/nvme0n1.'
+    [[ -b $disk && $(lsblk -dnro TYPE "$disk") == disk ]] || die 'Please choose a whole disk such as /dev/sda or /dev/nvme0n1.'
     source=$(findmnt -nro SOURCE / 2>/dev/null || true)
     [[ $(readlink -f -- "$source" 2>/dev/null || true) != "$disk" ]] || die 'Refusing to erase the running system disk.'
     while read -r name mounted; do [[ -z ${mounted:-} ]] || die "Refusing to erase $disk: $name is mounted at $mounted."; done < <(lsblk -nrpo NAME,MOUNTPOINT "$disk")
@@ -38,8 +99,8 @@ validate_disk() {
 }
 
 validate_settings() {
-    [[ $HOSTNAME =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || die 'Invalid hostname.'
-    [[ $USERNAME =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die 'Invalid username.'
+    [[ $HOSTNAME =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || die 'Invalid hostname. Please use only letters, numbers, and hyphens.'
+    [[ $USERNAME =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die 'Invalid username. Please use only lowercase letters, numbers, underscores, and hyphens.'
     [[ -f "/usr/share/zoneinfo/$TIMEZONE" ]] || die "Unknown timezone: $TIMEZONE"
     for locale in "$LOCALE" "$SECONDARY_LOCALE"; do [[ $locale =~ ^[a-zA-Z_]+\.UTF-8$ && -f "/usr/share/i18n/locales/${locale%.UTF-8}" ]] || die "Unknown locale: $locale"; done
 }
@@ -56,8 +117,8 @@ password() {
 choose_desktop() {
     local desktop
     while true; do
-        desktop=$(prompt 'Desktop (GNOME or KDE)' "$DEFAULT_DESKTOP")
-        case "${desktop,,}" in gnome) printf 'gnome\n'; return;; kde) printf 'kde\n'; return;; *) warn 'Choose GNOME or KDE.';; esac
+        desktop=$(prompt 'Choose Desktop Environment (GNOME or KDE)' "$DEFAULT_DESKTOP")
+        case "${desktop,,}" in gnome) printf 'gnome\n'; return;; kde) printf 'kde\n'; return;; *) warn 'Please choose between GNOME or KDE.';; esac
     done
 }
 
@@ -111,33 +172,104 @@ install_system() {
 }
 
 main() {
-    (( EUID == 0 )) || die 'Run this installer as root.'
-    [[ -d /sys/firmware/efi/efivars ]] || die 'Boot the live environment in UEFI mode.'
-    for command in arch-chroot curl findmnt genfstab lsblk mkfs.ext4 mkfs.fat mount mountpoint pacman pacman-key pacstrap parted partprobe readlink systemctl timedatectl udevadm; do need "$command"; done
-    msg 'Checking internet connection'
-    local attempt; for ((attempt=1; attempt<=30; attempt++)); do curl -fsS --max-time 5 https://archlinux.org/ >/dev/null && break; sleep 2; done
-    (( attempt <= 30 )) || die 'No internet connection after 60 seconds.'
+    # Ensure the script is run as root
+    if [[ $EUID -ne 0 ]]; then
+        echo "Please run this installer as root."
+        exit 1
+    fi
+
+    # Check if the live environment is booted in UEFI mode
+    if [[ ! -d /sys/firmware/efi/efivars ]]; then
+        echo "Please boot the live environment in UEFI mode."
+        exit 1
+    fi
+
+    # Check if necessary commands are available
+    for command in arch-chroot curl findmnt genfstab lsblk mkfs.ext4 mkfs.fat mount mountpoint pacman pacman-key pacstrap parted partprobe readlink systemctl timedatectl udevadm; do
+        if ! command -v "$command" &> /dev/null; then
+            echo "Missing command: $command"
+            exit 1
+        fi
+    done
+
+    # Check internet connection
+    echo "Checking internet connection..."
+    local attempt
+    for ((attempt=1; attempt<=30; attempt++)); do
+        if curl -fsS --max-time 5 https://archlinux.org/ &> /dev/null; then
+            break
+        fi
+        sleep 2
+    done
+    if (( attempt > 30 )); then
+        echo "No internet connection after 60 seconds."
+        exit 1
+    fi
+
+    # Set system clock to NTP
     timedatectl set-ntp true
-    msg 'Preparing trusted package keyrings'
+
+    # Prepare trusted package keyrings
+    echo "Preparing trusted package keyrings..."
     pacman-key --init
     pacman-key --populate archlinux
-    pacman -Sy --needed --noconfirm archlinux-keyring
-    pacman-key --populate archlinux
-    pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA  --keyserver keyserver.ubuntu.com
+    pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
     pacman-key --recv-keys 3056513887B78AEB --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key 3056513887B78AEB
+    pacman -Sy --needed --noconfirm archlinux-keyring
     pacman -U --needed --noconfirm \
         'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
         'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
-    local mode; mode=$(prompt 'Disk setup: automatic or manual' automatic)
-    case $mode in automatic|auto) echo 'Available disks:'; lsblk -d -o NAME,SIZE,MODEL,TYPE; DISK=$(validate_disk "$(prompt 'Target disk' /dev/sda)"); mode=automatic;; manual) mode=manual;; *) die 'Choose automatic or manual.';; esac
-    HOSTNAME=$(prompt Hostname "$DEFAULT_HOSTNAME"); TIMEZONE=$(prompt Timezone "$DEFAULT_TIMEZONE")
-    LOCALE=$(prompt 'Primary locale' "$DEFAULT_LOCALE"); SECONDARY_LOCALE=$(prompt 'Secondary locale' "$DEFAULT_SECONDARY_LOCALE")
-    DESKTOP=$(choose_desktop); USERNAME=$(prompt Username "$DEFAULT_USERNAME"); CACHYOS_REPOS=$(yes_no 'Enable CachyOS repositories?' no)
-    validate_settings; ROOT_PASSWORD=$(password 'Root password'); USER_PASSWORD=$(password "Password for $USERNAME")
-    [[ $mode == automatic ]] && prepare_automatic || verify_manual
-    install_system; unset ROOT_PASSWORD USER_PASSWORD
-    msg 'Installation complete'; echo 'Exit the live environment, unmount /mnt, and reboot when ready.'
+
+    # Choose disk setup mode
+    local mode
+    while true; do
+        read -p "Disk setup: automatic or manual? [automatic/manual] " mode
+        case $mode in
+            automatic|auto)
+                echo 'Available disks:'
+                lsblk -d -o NAME,SIZE,MODEL,TYPE
+                DISK=$(validate_disk "$(prompt 'Target disk' /dev/sda)")
+                break
+                ;;
+            manual)
+                mode=manual
+                break
+                ;;
+            *)
+                echo "Choose 'automatic' or 'manual'."
+                ;;
+        esac
+    done
+
+    # Collect system settings
+    HOSTNAME=$(prompt Hostname "$DEFAULT_HOSTNAME")
+    TIMEZONE=$(prompt Timezone "$DEFAULT_TIMEZONE")
+    LOCALE=$(prompt 'Primary locale' "$DEFAULT_LOCALE")
+    SECONDARY_LOCALE=$(prompt 'Secondary locale' "$DEFAULT_SECONDARY_LOCALE")
+    DESKTOP=$(choose_desktop)
+    USERNAME=$(prompt Username "$DEFAULT_USERNAME")
+    CACHYOS_REPOS=$(yes_no 'Enable CachyOS repositories?' no)
+
+    # Validate settings
+    validate_settings
+    ROOT_PASSWORD=$(password 'Root password')
+    USER_PASSWORD=$(password "Password for $USERNAME")
+
+    # Disk setup
+    if [[ $mode == automatic ]]; then
+        prepare_automatic
+    else
+        verify_manual
+    fi
+
+    # Install the system
+    install_system
+    unset ROOT_PASSWORD USER_PASSWORD
+
+    # Final message
+    msg 'Installation complete'
+    echo 'Exit the live environment, unmount /mnt, and reboot when ready.'
 }
 main "$@"

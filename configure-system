@@ -4,24 +4,37 @@
 set -Eeuo pipefail
 IFS=$'\n\t'
 
-required=(TARGET_HOSTNAME TARGET_TIMEZONE TARGET_LOCALE TARGET_SECONDARY_LOCALE TARGET_DESKTOP TARGET_USERNAME TARGET_ROOT_PASSWORD TARGET_USER_PASSWORD TARGET_CACHYOS_REPOS)
-for variable in "${required[@]}"; do [[ -n ${!variable:-} ]] || { echo "Missing configuration: $variable" >&2; exit 1; }; done
+msg() {
+    printf '\n=== %s ===\n\n' "$1"
+}
+
+# Ensure all required variables are set before proceeding
+required_variables=("TARGET_HOSTNAME" "TARGET_TIMEZONE" "TARGET_LOCALE" "TARGET_SECONDARY_LOCALE" "TARGET_DESKTOP" "TARGET_USERNAME" "TARGET_ROOT_PASSWORD" "TARGET_USER_PASSWORD" "TARGET_CACHYOS_REPOS")
+
+# Loop through each required variable and check if it's set
+for variable in "${required_variables[@]}"; do
+  if [[ -z ${!variable:-} ]]; then
+        msg "Missing configuration: $variable"
+    exit 1
+  fi
+done
 
 TARGET_CACHYOS_REPOS=${TARGET_CACHYOS_REPOS,,}
 TARGET_DESKTOP=${TARGET_DESKTOP,,}
 
 [[ $TARGET_CACHYOS_REPOS == yes || $TARGET_CACHYOS_REPOS == no ]] || {
-    echo 'TARGET_CACHYOS_REPOS must be yes or no.' >&2
+    msg 'TARGET_CACHYOS_REPOS must be yes or no.'
     exit 1
 }
 
 case "$TARGET_DESKTOP" in
     gnome) DESKTOP_PACKAGE=SteavenLinux-gnome-meta ;;
     kde) DESKTOP_PACKAGE=SteavenLinux-plasma-meta ;;
-    *) echo 'TARGET_DESKTOP must be GNOME or KDE.' >&2; exit 1 ;;
+    *) msg 'TARGET_DESKTOP must be GNOME or KDE.'; exit 1 ;;
 esac
 
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
+    msg 'Adding CachyOS repositories'
     pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key F3B607488DB35A47
     pacman -U --needed --noconfirm \
@@ -38,6 +51,7 @@ if [[ $TARGET_CACHYOS_REPOS == no ]]; then
     pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
 fi
 
+msg 'Setting timezone and locale'
 ln -sf "/usr/share/zoneinfo/$TARGET_TIMEZONE" /etc/localtime
 hwclock --systohc
 printf '%s UTF-8\n%s UTF-8\n' "$TARGET_LOCALE" "$TARGET_SECONDARY_LOCALE" > /etc/locale.gen
@@ -45,15 +59,34 @@ locale-gen
 printf 'LANG=%s\n' "$TARGET_LOCALE" > /etc/locale.conf
 printf '%s\n' "$TARGET_HOSTNAME" > /etc/hostname
 
-printf 'root:%s\n' "$TARGET_ROOT_PASSWORD" | chpasswd
+# Set the root password
+msg "Setting the root password..."
+echo "$TARGET_ROOT_PASSWORD" | chpasswd
+
+# Create a new user with the specified username
+msg "Creating user $TARGET_USERNAME..."
 useradd --create-home --groups wheel --shell /usr/bin/bash "$TARGET_USERNAME"
-printf '%s:%s\n' "$TARGET_USERNAME" "$TARGET_USER_PASSWORD" | chpasswd
-for group in audio video render input storage games; do getent group "$group" >/dev/null && usermod -aG "$group" "$TARGET_USERNAME"; done
-install -Dm440 /dev/stdin /etc/sudoers.d/10-wheel <<'EOF'
-%wheel ALL=(ALL:ALL) ALL
-EOF
+
+# Set the password for the new user
+msg "Setting the password for $TARGET_USERNAME..."
+echo "$TARGET_USER_PASSWORD" | chpasswd
+
+# Add the user to additional groups
+msg "Adding $TARGET_USERNAME to audio, video, render, input, storage, and games groups..."
+groups_to_add=("audio" "video" "render" "input" "storage" "games")
+for group in "${groups_to_add[@]}"; do
+    if getent group "$group" >/dev/null; then
+        usermod -aG "$group" "$TARGET_USERNAME"
+    fi
+done
+
+# Configure sudo permissions for the wheel group
+msg 'Configuring sudo permissions'
+sudo_config="%wheel ALL=(ALL:ALL) ALL"
+echo "$sudo_config" > /etc/sudoers.d/10-wheel
 visudo -cf /etc/sudoers.d/10-wheel
 
+msg 'Installing necessary packages'
 pacman -Syu --needed --noconfirm grub efibootmgr networkmanager flatpak "$DESKTOP_PACKAGE"
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 flatpak install --system --noninteractive flathub io.gitlab.librewolf-community
