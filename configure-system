@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Runs inside the installed system. Configuration is passed as environment data,
+# never interpolated into generated shell source.
+set -Eeuo pipefail
+IFS=$'\n\t'
+
+required=(TARGET_HOSTNAME TARGET_TIMEZONE TARGET_LOCALE TARGET_SECONDARY_LOCALE TARGET_DESKTOP TARGET_USERNAME TARGET_ROOT_PASSWORD TARGET_USER_PASSWORD TARGET_CACHYOS_REPOS)
+for variable in "${required[@]}"; do [[ -n ${!variable:-} ]] || { echo "Missing configuration: $variable" >&2; exit 1; }; done
+
+if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
+    pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
+    pacman-key --lsign-key F3B607488DB35A47
+    pacman -U --needed --noconfirm \
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst'
+    install -Dm644 /root/pacman-cachyos.conf /etc/pacman.conf
+    rm -f /root/pacman-cachyos.conf
+    pacman -Syu --needed --noconfirm linux-cachyos linux-cachyos-headers
+else
+    pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
+fi
+
+ln -sf "/usr/share/zoneinfo/$TARGET_TIMEZONE" /etc/localtime
+hwclock --systohc
+printf '%s UTF-8\n%s UTF-8\n' "$TARGET_LOCALE" "$TARGET_SECONDARY_LOCALE" > /etc/locale.gen
+locale-gen
+printf 'LANG=%s\n' "$TARGET_LOCALE" > /etc/locale.conf
+printf '%s\n' "$TARGET_HOSTNAME" > /etc/hostname
+
+printf 'root:%s\n' "$TARGET_ROOT_PASSWORD" | chpasswd
+useradd --create-home --groups wheel --shell /usr/bin/bash "$TARGET_USERNAME"
+printf '%s:%s\n' "$TARGET_USERNAME" "$TARGET_USER_PASSWORD" | chpasswd
+for group in audio video render input storage games; do getent group "$group" >/dev/null && usermod -aG "$group" "$TARGET_USERNAME"; done
+install -Dm440 /dev/stdin /etc/sudoers.d/10-wheel <<'EOF'
+%wheel ALL=(ALL:ALL) ALL
+EOF
+visudo -cf /etc/sudoers.d/10-wheel
+
+pacman -Syu --needed --noconfirm grub efibootmgr networkmanager "$TARGET_DESKTOP" librewolf
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
+grub-mkconfig -o /boot/grub/grub.cfg
+systemctl enable NetworkManager
+case "$TARGET_DESKTOP" in
+    SteavenLinux-gnome-meta) systemctl enable gdm.service ;;
+    SteavenLinux-plasma-meta) systemctl enable plasmalogin.service ;;
+esac

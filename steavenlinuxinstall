@@ -1,305 +1,129 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Run from an Arch Linux live environment booted in UEFI mode.
+set -Eeuo pipefail
+IFS=$'\n\t'
+umask 077
 
-# Check if running as root
-if [[ $EUID -ne 0 ]]; then
-   echo "This script must be run as root" 
-   exit 1
-fi
+readonly DEFAULT_HOSTNAME=SteavenLinux DEFAULT_TIMEZONE=Africa/Cairo DEFAULT_LOCALE=en_US.UTF-8
+readonly DEFAULT_SECONDARY_LOCALE=ar_EG.UTF-8 DEFAULT_DESKTOP=SteavenLinux-gnome-meta DEFAULT_USERNAME=steavengameryt
+ROOT_PASSWORD='' USER_PASSWORD=''
 
-# Function to print messages
-function msg() {
-    echo -e "\n=== $1 ===\n"
+msg() { printf '\n=== %s ===\n\n' "$1"; }
+warn() { printf 'Warning: %s\n' "$1" >&2; }
+die() { printf 'Error: %s\n' "$1" >&2; exit 1; }
+on_exit() { local status=$?; unset ROOT_PASSWORD USER_PASSWORD; (( status == 0 )) || warn 'Installation stopped; mounts were left in place for recovery.'; }
+trap on_exit EXIT
+
+need() { command -v "$1" >/dev/null 2>&1 || die "Required command is missing: $1"; }
+prompt() { local value; read -r -p "$1 [$2]: " value; printf '%s\n' "${value:-$2}"; }
+yes_no() { local value; while true; do read -r -p "$1 [$2]: " value; case "${value:-$2}" in yes|y|YES|Y) echo yes; return;; no|n|NO|N) echo no; return;; *) warn 'Enter yes or no.';; esac; done; }
+partition_path() { [[ $1 =~ [0-9]$ ]] && printf '%sp%s\n' "$1" "$2" || printf '%s%s\n' "$1" "$2"; }
+
+asset() {
+    local here
+    here=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+    [[ -f "$here/$1" ]] && printf '%s\n' "$here/$1" && return
+    [[ -f "/usr/share/steaveninstaller/$1" ]] && printf '%s\n' "/usr/share/steaveninstaller/$1" && return
+    die "Required installer asset is missing: $1"
 }
 
-# Step 1: Connect to the internet
-msg "Connecting to the internet"
-# Use iwctl for Wi-Fi or ensure you are connected via Ethernet
-# Uncomment and edit the following line to connect to Wi-Fi
-# iwctl station device connect SSID
-until curl -fsS --max-time 5 https://archlinux.org >/dev/null 2>&1; do
-    sleep 2
-done
-msg "Internet connection established"
-
-
-# fixing pacman
-pacman-key --init
-pacman-key --populate archlinux
-pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA --keyserver keyserver.ubuntu.com
-pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
-
-# Default Variables
-DEFAULT_DISK="/dev/sda"
-DEFAULT_EFI_PART="${DEFAULT_DISK}1"
-DEFAULT_ROOT_PART="${DEFAULT_DISK}2"
-DEFAULT_HOSTNAME="SteavenLinux"
-DEFAULT_TIMEZONE="Africa/Cairo"
-DEFAULT_LOCALE="en_US.UTF-8"
-DEFAULT_LOCALE2="ar_EG.UTF-8"
-DEFAULT_DE="SteavenLinux-gnome-meta"
-DEFAULT_USERNAME="steavengameryt"
-CACHYOS_REPOS="yes"
-
-# Function to prompt for input with a default value
-function prompt_input() {
-    local prompt_message="$1"
-    local default_value="$2"
-    read -p "$prompt_message [$default_value]: " user_input
-    echo "${user_input:-$default_value}"
+validate_disk() {
+    local disk source name mounted
+    disk=$(readlink -f -- "$1") || die "Cannot resolve disk: $1"
+    [[ -b $disk && $(lsblk -dnro TYPE "$disk") == disk ]] || die 'Choose a whole disk such as /dev/sda or /dev/nvme0n1.'
+    source=$(findmnt -nro SOURCE / 2>/dev/null || true)
+    [[ $(readlink -f -- "$source" 2>/dev/null || true) != "$disk" ]] || die 'Refusing to erase the running system disk.'
+    while read -r name mounted; do [[ -z ${mounted:-} ]] || die "Refusing to erase $disk: $name is mounted at $mounted."; done < <(lsblk -nrpo NAME,MOUNTPOINT "$disk")
+    printf '%s\n' "$disk"
 }
-# Function to prompt for yes/no input
-function prompt_yes_no() {
-    local prompt_message="$1"
-    local default_value="$2"
-    local user_input=""
-    
+
+validate_settings() {
+    [[ $HOSTNAME =~ ^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$ ]] || die 'Invalid hostname.'
+    [[ $USERNAME =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || die 'Invalid username.'
+    [[ -f "/usr/share/zoneinfo/$TIMEZONE" ]] || die "Unknown timezone: $TIMEZONE"
+    for locale in "$LOCALE" "$SECONDARY_LOCALE"; do [[ $locale =~ ^[a-zA-Z_]+\.UTF-8$ && -f "/usr/share/i18n/locales/${locale%.UTF-8}" ]] || die "Unknown locale: $locale"; done
+}
+
+password() {
+    local label=$1 first second
     while true; do
-        read -p "$prompt_message [$default_value]: " user_input
-        user_input="${user_input:-$default_value}"  # Use default if no input is provided
-        if [[ "$user_input" =~ ^(yes|no)$ ]]; then
-            echo "$user_input"
-            break
-        else
-            echo "Invalid choice. Please enter 'yes' or 'no'."
-        fi
-    done
-}
-# Function to prompt for input with a default value and limit the choices to only two valid options
-function prompt_de_choice() {
-    local prompt_message="$1"
-    local default_value="$2"
-    local valid_choices=("SteavenLinux-plasma-meta" "SteavenLinux-gnome-meta")
-    local user_input=""
-
-    while true; do
-        read -p "$prompt_message [$default_value]: " user_input
-        user_input="${user_input:-$default_value}"  # Use default if no input is provided
-        # Check if the input is one of the valid choices
-        if [[ " ${valid_choices[*]} " == *" $user_input "* ]]; then
-            echo "$user_input"
-            break
-        else
-            echo "Invalid choice. Please enter either 'SteavenLinux-plasma-meta' or 'SteavenLinux-gnome-meta'."
-        fi
+        read -r -s -p "$label: " first; printf '\n'; [[ -n $first ]] || { warn 'Passwords cannot be empty.'; continue; }
+        read -r -s -p "Confirm $label: " second; printf '\n'
+        [[ $first == "$second" ]] && { printf '%s' "$first"; return; }; warn 'Passwords did not match.'
     done
 }
 
-function prompt_partition_mode() {
-    local user_input=""
-
+choose_desktop() {
+    local desktop
     while true; do
-        read -p "Choose disk setup: automatic or manual [automatic]: " user_input
-        user_input="${user_input:-automatic}"
-
-        case "$user_input" in
-            automatic|auto)
-                echo "automatic"
-                return
-                ;;
-            manual)
-                echo "manual"
-                return
-                ;;
-            *)
-                echo "Invalid choice. Enter 'automatic' or 'manual'."
-                ;;
-        esac
+        desktop=$(prompt 'Desktop (SteavenLinux-gnome-meta or SteavenLinux-plasma-meta)' "$DEFAULT_DESKTOP")
+        case $desktop in SteavenLinux-gnome-meta|SteavenLinux-plasma-meta) printf '%s\n' "$desktop"; return;; *) warn 'Choose GNOME or Plasma.';; esac
     done
 }
 
-# Prompt for user input
-PARTITION_MODE=$(prompt_partition_mode)
-DISK=$(prompt_input "Enter the target disk" "$DEFAULT_DISK")
-EFI_PART="${DISK}1"
-ROOT_PART="${DISK}2"
-HOSTNAME=$(prompt_input "Enter the hostname" "$DEFAULT_HOSTNAME")
-TIMEZONE=$(prompt_input "Enter the timezone" "$DEFAULT_TIMEZONE")
-LOCALE=$(prompt_input "Enter the locale" "$DEFAULT_LOCALE")
-LOCALE2=$(prompt_input "Enter the secound locale" "$DEFAULT_LOCALE2")
-DE=$(prompt_de_choice "Choose your Desktop Environment: SteavenLinux-plasma-meta or SteavenLinux-gnome-meta" "$DEFAULT_DE")
-USERNAME=$(prompt_input "Enter your username" "$DEFAULT_USERNAME")
-CACHYOS_REPOS=$(prompt_yes_no "Enable CachyOS repositories?" "yes")
-
-# Prompt for root password before entering chroot
-read -s -p "Enter the root password: " ROOT_PASSWORD
-echo
-
-# Prompt for user password before entering chroot
-read -s -p "Enter the user password: " USER_PASSWORD
-echo
-
-
-# Step 2: Update the system clock
-msg "Updating the system clock"
-timedatectl set-ntp true
-
-# Step 3: Disk setup
-if [[ "$PARTITION_MODE" == "automatic" ]]; then
-    msg "Automatic disk setup"
-
-    echo "WARNING: ALL DATA ON $DISK WILL BE ERASED!"
-    read -p "Continue? Type YES to continue: " CONFIRM
-
-    [[ "$CONFIRM" == "YES" ]] || exit 1
-
-    parted "$DISK" mklabel gpt
-    parted "$DISK" mkpart primary fat32 1MiB 2049MiB
-    parted "$DISK" set 1 esp on
-    parted "$DISK" mkpart primary ext4 2049MiB 100%
-
-    EFI_PART="${DISK}1"
-    ROOT_PART="${DISK}2"
-
-    mkfs.fat -F32 "$EFI_PART"
-    mkfs.ext4 "$ROOT_PART"
-
-    mount "$ROOT_PART" /mnt
-    mkdir -p /mnt/boot
-    mount "$EFI_PART" /mnt/boot
-fi
-
-
-if [[ "$PARTITION_MODE" == "manual" ]]; then
-    msg "Manual disk setup"
-
-    echo "The installer will NOT partition, format, or mount anything."
-    echo
-    echo "Please prepare your disks manually:"
-    echo "  Root filesystem -> /mnt"
-    echo "  EFI partition   -> /mnt/boot"
-    echo
-
-    read -p "Press ENTER when ready..."
-
-    if ! mountpoint -q /mnt; then
-        echo "ERROR: /mnt is not mounted."
-        exit 1
-    fi
-
-    if ! mountpoint -q /mnt/boot; then
-        echo "ERROR: /mnt/boot is not mounted."
-        exit 1
-    fi
-
-    msg "Manual setup detected"
-
-    findmnt /mnt
-    findmnt /mnt/boot
-
-    read -p "Continue installation? [yes/no]: " CONFIRM
-
-    if [[ "$CONFIRM" != "yes" ]]; then
-        exit 1
-    fi
-fi
-
-# Step 4: Format the partitions
-msg "Formatting the partitions"
-mkfs.fat -F32 $EFI_PART
-mkfs.ext4 $ROOT_PART
-
-# Step 5: Mount the filesystems
-msg "Mounting the filesystems"
-mount $ROOT_PART /mnt
-mkdir /mnt/boot
-mount $EFI_PART /mnt/boot
-
-# Step 6: Install base packages
-msg "Installing base packages"
-pacstrap -K -P /mnt chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName base base-devel git
-mkdir -p /etc/pacman.d/
-cp /etc/pacman.d/steavenrepo-mirrorlist /mnt/etc/pacman.d/steavenrepo-mirrorlist 
-
-# Step 7: Generate fstab
-msg "Generating fstab"
-genfstab -U /mnt >> /mnt/etc/fstab
-
-# Step 8: Change root into the new system
-msg "Entering the new system"
-arch-chroot /mnt /bin/bash <<EOF
-
-# Function to print messages
-function msg() {
-    echo -e "\n=== $1 ===\n"
+prepare_automatic() {
+    local confirmation
+    msg 'Automatic disk setup'; echo "This permanently erases every file on $DISK."; lsblk -d -o NAME,SIZE,MODEL "$DISK"
+    read -r -p "Type exactly 'ERASE $DISK' to continue: " confirmation
+    [[ $confirmation == "ERASE $DISK" ]] || die 'Disk erase cancelled.'
+    parted --script "$DISK" mklabel gpt
+    parted --script "$DISK" mkpart ESP fat32 1MiB 2049MiB
+    parted --script "$DISK" set 1 esp on
+    parted --script "$DISK" mkpart root ext4 2049MiB 100%
+    partprobe "$DISK"; udevadm settle
+    EFI_PART=$(partition_path "$DISK" 1); ROOT_PART=$(partition_path "$DISK" 2)
+    [[ -b $EFI_PART && -b $ROOT_PART ]] || die 'New partitions were not detected.'
+    msg 'Formatting and mounting partitions'
+    mkfs.fat -F 32 "$EFI_PART"; mkfs.ext4 -F "$ROOT_PART"
+    mount "$ROOT_PART" /mnt; mkdir -p /mnt/boot; mount "$EFI_PART" /mnt/boot
 }
 
-pacman-key --init
-pacman-key --populate archlinux
-pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA --keyserver keyserver.ubuntu.com
-pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
+verify_manual() {
+    msg 'Manual disk setup'
+    echo 'Prepare root at /mnt and the EFI System Partition at /mnt/boot.'
+    echo 'Manual mode never partitions, formats, mounts, or unmounts a filesystem.'
+    read -r -p 'Press Enter after the filesystems are ready.'
+    mountpoint -q /mnt || die '/mnt is not mounted.'; mountpoint -q /mnt/boot || die '/mnt/boot is not mounted.'
+    findmnt /mnt /mnt/boot
+    [[ $(yes_no 'Continue with these mounted filesystems?' no) == yes ]] || die 'Installation cancelled.'
+}
 
-
-if [[ "$CACHYOS_REPOS" == "yes" ]]; then
-    pacman -Sy --noconfirm wget
-    pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
-    pacman-key --lsign-key F3B607488DB35A47
-    pacman -U --noconfirm 'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
-'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
-'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
-'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
-'https://mirror.cachyos.org/repo/x86_64/cachyos/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
-    wget -O /etc/pacman.conf https://github.com/SteavenLinux/SteavenInstaller/raw/refs/heads/main/pacman-cachyos.conf
-fi
-
-
-if [[ "$CACHYOS_REPOS" == "yes" ]]; then
-    pacman -Syu --noconfirm base base-devel git linux-cachyos linux-cachyos-headers linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager
-else
-    pacman -Syu --noconfirm base base-devel git linux-zen linux-zen-headers linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager
-fi
-
-# Step 9: Set the timezone
-msg "Setting the timezone"
-ln -sf /usr/share/zoneinfo/$TIMEZONE /etc/localtime
-hwclock --systohc
-
-# Step 10: Localization
-msg "Setting the locale"
-echo "$LOCALE UTF-8" > /etc/locale.gen
-echo "$LOCALE2 UTF-8" >> /etc/locale.gen
-locale-gen
-echo "LANG=$LOCALE" > /etc/locale.conf
-
-# Step 11: Set the hostname
-msg "Setting the hostname"
-echo "$HOSTNAME" > /etc/hostname
-
-# Step 12: Set the root password
-msg "Setting the root password"
-echo "root:$ROOT_PASSWORD" | chpasswd
-
-msg "Createing user"
-useradd -m -G wheel -s /usr/bin/bash $USERNAME
-echo '%wheel ALL=(ALL) ALL' | tee -a /etc/sudoers
-
-
-msg "Setting the User password"
-echo "$USERNAME:$USER_PASSWORD" | chpasswd
-
-# Step 13: Install a bootloader
-msg "Installing the bootloader"
-pacman -S --noconfirm grub efibootmgr
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
-
-systemctl enable NetworkManager
-
-pacman -S --noconfirm "$DE"
-
-if [[ $? -eq 0 ]]; then
-    if [[ "$DE" == "SteavenLinux-gnome-meta" ]]; then
-        systemctl enable gdm.service
-
-    elif [[ "$DE" == "SteavenLinux-plasma-meta" ]]; then
-        systemctl enable plasmalogin.service
+install_system() {
+    local mirrorlist config setup
+    msg 'Installing base system'
+    pacstrap -K /mnt base base-devel git sudo linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName
+    mirrorlist=/etc/pacman.d/steavenrepo-mirrorlist
+    [[ -f $mirrorlist ]] || die 'The SteavenLinux mirror list is missing from the live environment.'
+    install -Dm644 "$mirrorlist" /mnt/etc/pacman.d/steavenrepo-mirrorlist
+    genfstab -U /mnt > /mnt/etc/fstab
+    config=$(asset pacman-arch.conf)
+    install -Dm644 "$config" /mnt/etc/pacman.conf
+    if [[ $CACHYOS_REPOS == yes ]]; then
+        config=$(asset pacman-cachyos.conf)
+        install -Dm644 "$config" /mnt/root/pacman-cachyos.conf
     fi
-else
-    echo "Failed to install $DE"
-    exit 1
-fi
+    setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
+    msg 'Configuring installed system'
+    arch-chroot /mnt /usr/bin/env "TARGET_HOSTNAME=$HOSTNAME" "TARGET_TIMEZONE=$TIMEZONE" "TARGET_LOCALE=$LOCALE" "TARGET_SECONDARY_LOCALE=$SECONDARY_LOCALE" "TARGET_DESKTOP=$DESKTOP" "TARGET_USERNAME=$USERNAME" "TARGET_ROOT_PASSWORD=$ROOT_PASSWORD" "TARGET_USER_PASSWORD=$USER_PASSWORD" "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" /root/configure-system
+    rm -f /mnt/root/configure-system
+}
 
-msg "adding user to groups"
-usermod -aG games,network,floppy,scanner,power,audio,disk,input,kvm,optical,render,tty,uucp,video,users,git $USERNAME
-
-pacman -Sy --noconfirm librewolf
-EOF
+main() {
+    (( EUID == 0 )) || die 'Run this installer as root.'
+    [[ -d /sys/firmware/efi/efivars ]] || die 'Boot the live environment in UEFI mode.'
+    for command in arch-chroot curl findmnt genfstab lsblk mkfs.ext4 mkfs.fat mount mountpoint pacman-key pacstrap parted partprobe readlink systemctl timedatectl udevadm; do need "$command"; done
+    msg 'Checking internet connection'
+    local attempt; for ((attempt=1; attempt<=30; attempt++)); do curl -fsS --max-time 5 https://archlinux.org/ >/dev/null && break; sleep 2; done
+    (( attempt <= 30 )) || die 'No internet connection after 60 seconds.'
+    pacman-key --init; pacman-key --populate archlinux; timedatectl set-ntp true
+    local mode; mode=$(prompt 'Disk setup: automatic or manual' automatic)
+    case $mode in automatic|auto) echo 'Available disks:'; lsblk -d -o NAME,SIZE,MODEL,TYPE; DISK=$(validate_disk "$(prompt 'Target disk' /dev/sda)"); mode=automatic;; manual) mode=manual;; *) die 'Choose automatic or manual.';; esac
+    HOSTNAME=$(prompt Hostname "$DEFAULT_HOSTNAME"); TIMEZONE=$(prompt Timezone "$DEFAULT_TIMEZONE")
+    LOCALE=$(prompt 'Primary locale' "$DEFAULT_LOCALE"); SECONDARY_LOCALE=$(prompt 'Secondary locale' "$DEFAULT_SECONDARY_LOCALE")
+    DESKTOP=$(choose_desktop); USERNAME=$(prompt Username "$DEFAULT_USERNAME"); CACHYOS_REPOS=$(yes_no 'Enable CachyOS repositories?' no)
+    validate_settings; ROOT_PASSWORD=$(password 'Root password'); USER_PASSWORD=$(password "Password for $USERNAME")
+    [[ $mode == automatic ]] && prepare_automatic || verify_manual
+    install_system; unset ROOT_PASSWORD USER_PASSWORD
+    msg 'Installation complete'; echo 'Exit the live environment, unmount /mnt, and reboot when ready.'
+}
+main "$@"

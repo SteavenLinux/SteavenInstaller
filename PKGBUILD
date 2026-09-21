@@ -21,4 +21,7 @@ pkgver() {
 package() {
   cd "$srcdir/SteavenInstaller"
   install -Dm755 steavenlinuxinstall "$pkgdir/usr/bin/steavenlinuxinstall"
+  install -Dm755 configure-system "$pkgdir/usr/share/steaveninstaller/configure-system"
+  install -Dm644 pacman-cachyos.conf "$pkgdir/usr/share/steaveninstaller/pacman-cachyos.conf"
+  install -Dm644 pacman-arch.conf "$pkgdir/usr/share/steaveninstaller/pacman-arch.conf"
 }

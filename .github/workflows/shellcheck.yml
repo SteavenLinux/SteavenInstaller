@@ -1,0 +1,17 @@
+name: Shell checks
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install ShellCheck
+        run: sudo apt-get update && sudo apt-get install --yes shellcheck
+      - name: Check shell syntax
+        run: bash -n steavenlinuxinstall configure-system PKGBUILD
+      - name: Run ShellCheck
+        run: shellcheck -x steavenlinuxinstall configure-system
