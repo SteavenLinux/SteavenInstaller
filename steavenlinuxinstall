@@ -198,7 +198,7 @@ install -m600 /dev/null /mnt/root/install-passwords
 printf '%s\n' "$ROOT_PASSWORD" > /mnt/root/install-passwords
 printf '%s\n' "$USER_PASSWORD" >> /mnt/root/install-passwords
 
-arch-chroot /mnt /usr/bin/env \
+if ! arch-chroot /mnt /usr/bin/env \
     "TARGET_HOSTNAME=$HOSTNAME" \
     "TARGET_TIMEZONE=$TIMEZONE" \
     "TARGET_LOCALE=$LOCALE" \
@@ -207,7 +207,10 @@ arch-chroot /mnt /usr/bin/env \
     "TARGET_USERNAME=$USERNAME" \
     "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" \
     "SCRIPT_NAME=$(basename "$setup")" \
-    /root/configure-system
+    /root/configure-system; then
+    rm -f /mnt/root/install-passwords
+    return 1
+fi
 
 rm -f /mnt/root/install-passwords
 }
