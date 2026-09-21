@@ -167,8 +167,17 @@ install_system() {
     fi
     setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
     msg 'Configuring installed system'
-    arch-chroot /mnt /usr/bin/env "TARGET_HOSTNAME=$HOSTNAME" "TARGET_TIMEZONE=$TIMEZONE" "TARGET_LOCALE=$LOCALE" "TARGET_SECONDARY_LOCALE=$SECONDARY_LOCALE" "TARGET_DESKTOP=$DESKTOP" "TARGET_USERNAME=$USERNAME" "TARGET_ROOT_PASSWORD=$ROOT_PASSWORD" "TARGET_USER_PASSWORD=$USER_PASSWORD" "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" /root/configure-system
-    rm -f /mnt/root/configure-system
+export TARGET_HOSTNAME="$HOSTNAME"
+export TARGET_TIMEZONE="$TIMEZONE"
+export TARGET_LOCALE="$LOCALE"
+export TARGET_SECONDARY_LOCALE="$SECONDARY_LOCALE"
+export TARGET_DESKTOP="$DESKTOP"
+export TARGET_USERNAME="$USERNAME"
+export TARGET_ROOT_PASSWORD="$ROOT_PASSWORD"
+export TARGET_USER_PASSWORD="$USER_PASSWORD"
+export TARGET_CACHYOS_REPOS="$CACHYOS_REPOS"
+
+arch-chroot /mnt /usr/bin/env "SCRIPT_NAME=$setup_name" /root/configure-system
 }
 
 main() {
@@ -273,3 +282,5 @@ main() {
     echo 'Exit the live environment, unmount /mnt, and reboot when ready.'
 }
 main "$@"
+
+readonly DEFAULT_SECONDARY_LOCALE="ar_EG.UTF-
