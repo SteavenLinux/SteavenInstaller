@@ -54,18 +54,28 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
 
     install -d -m755 /var/cache/pacman/pkg
 
-    pacman -U --noconfirm \
+    wget -P /var/cache/pacman/pkg \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
 
-    install -Dm644 /usr/share/steaveninstaller/pacman-cachyos.conf /etc/pacman.conf
+    pacman -U --noconfirm \
+        /var/cache/pacman/pkg/cachyos-keyring-20240331-1-any.pkg.tar.zst \
+        /var/cache/pacman/pkg/cachyos-mirrorlist-27-1-any.pkg.tar.zst \
+        /var/cache/pacman/pkg/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst \
+        /var/cache/pacman/pkg/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst \
+        /var/cache/pacman/pkg/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst
+
+    install -Dm644 \
+        /usr/share/steaveninstaller/pacman-cachyos.conf \
+        /etc/pacman.conf
 
     pacman -Syyu --needed --noconfirm
     pacman -S --needed --noconfirm linux-cachyos linux-cachyos-headers
 fi
+
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then
     pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
 fi
