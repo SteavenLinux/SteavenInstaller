@@ -177,7 +177,10 @@ export TARGET_ROOT_PASSWORD="$ROOT_PASSWORD"
 export TARGET_USER_PASSWORD="$USER_PASSWORD"
 export TARGET_CACHYOS_REPOS="$CACHYOS_REPOS"
 
-arch-chroot /mnt /usr/bin/env "SCRIPT_NAME=$setup_name" /root/configure-system
+# Pass the installed system script name as an environment variable to configure-system
+arch-chroot /mnt /usr/bin/env \
+    "SCRIPT_NAME=$(basename "$setup")" \
+    /root/configure-system
 }
 
 main() {
@@ -234,7 +237,7 @@ main() {
     # Choose disk setup mode
     local mode
     while true; do
-        read -p "Disk setup: automatic or manual? [automatic/manual] " mode
+        read -r -p "Disk setup: automatic or manual? [automatic/manual] " mode
         case $mode in
             automatic|auto)
                 echo 'Available disks:'
