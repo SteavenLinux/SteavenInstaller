@@ -105,12 +105,37 @@ validate_settings() {
     for locale in "$LOCALE" "$SECONDARY_LOCALE"; do [[ $locale =~ ^[a-zA-Z_]+\.UTF-8$ && -f "/usr/share/i18n/locales/${locale%.UTF-8}" ]] || die "Unknown locale: $locale"; done
 }
 
-password() {
-    local label=$1 first second
+get_passwords() {
     while true; do
-        read -r -s -p "$label: " first; printf '\n'; [[ -n $first ]] || { warn 'Passwords cannot be empty.'; continue; }
-        read -r -s -p "Confirm $label: " second; printf '\n'
-        [[ $first == "$second" ]] && { printf '%s' "$first"; return; }; warn 'Passwords did not match.'
+        read -r -s -p 'Password for Root: ' ROOT_PASSWORD
+        printf '\n'
+
+        read -r -s -p 'Password for Root confirm: ' ROOT_PASSWORD_CONFIRM
+        printf '\n'
+
+        read -r -s -p "Password for $USERNAME: " USER_PASSWORD
+        printf '\n'
+
+        read -r -s -p "Password for $USERNAME confirm: " USER_PASSWORD_CONFIRM
+        printf '\n'
+
+        if [[ -z $ROOT_PASSWORD || -z $USER_PASSWORD ]]; then
+            warn 'Passwords cannot be empty.'
+            continue
+        fi
+
+        if [[ $ROOT_PASSWORD != "$ROOT_PASSWORD_CONFIRM" ]]; then
+            warn 'Root passwords did not match.'
+            continue
+        fi
+
+        if [[ $USER_PASSWORD != "$USER_PASSWORD_CONFIRM" ]]; then
+            warn 'User passwords did not match.'
+            continue
+        fi
+
+        unset ROOT_PASSWORD_CONFIRM USER_PASSWORD_CONFIRM
+        return
     done
 }
 
@@ -167,21 +192,20 @@ install_system() {
     fi
     setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
     msg 'Configuring installed system'
-export TARGET_HOSTNAME="$HOSTNAME"
-export TARGET_TIMEZONE="$TIMEZONE"
-export TARGET_LOCALE="$LOCALE"
-export TARGET_SECONDARY_LOCALE="$SECONDARY_LOCALE"
-export TARGET_DESKTOP="$DESKTOP"
-export TARGET_USERNAME="$USERNAME"
-export TARGET_ROOT_PASSWORD="$ROOT_PASSWORD"
-export TARGET_USER_PASSWORD="$USER_PASSWORD"
-export TARGET_CACHYOS_REPOS="$CACHYOS_REPOS"
 
-# Pass the installed system script name as an environment variable to configure-system
+msg 'Configuring installed system'
 arch-chroot /mnt /usr/bin/env \
+    "TARGET_HOSTNAME=$HOSTNAME" \
+    "TARGET_TIMEZONE=$TIMEZONE" \
+    "TARGET_LOCALE=$LOCALE" \
+    "TARGET_SECONDARY_LOCALE=$SECONDARY_LOCALE" \
+    "TARGET_DESKTOP=$DESKTOP" \
+    "TARGET_USERNAME=$USERNAME" \
+    "TARGET_ROOT_PASSWORD=$ROOT_PASSWORD" \
+    "TARGET_USER_PASSWORD=$USER_PASSWORD" \
+    "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" \
     "SCRIPT_NAME=$(basename "$setup")" \
     /root/configure-system
-}
 
 main() {
     # Ensure the script is run as root
