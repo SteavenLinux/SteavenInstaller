@@ -61,7 +61,7 @@ printf '%s\n' "$TARGET_HOSTNAME" > /etc/hostname
 
 # Set the root password
 msg "Setting the root password..."
-echo "$TARGET_ROOT_PASSWORD" | chpasswd
+printf 'root:%s\n' "$TARGET_ROOT_PASSWORD" | chpasswd
 
 # Create a new user with the specified username
 msg "Creating user $TARGET_USERNAME..."
@@ -69,7 +69,7 @@ useradd --create-home --groups wheel --shell /usr/bin/bash "$TARGET_USERNAME"
 
 # Set the password for the new user
 msg "Setting the password for $TARGET_USERNAME..."
-echo "$TARGET_USER_PASSWORD" | chpasswd
+printf '%s:%s\n' "$TARGET_USERNAME" "$TARGET_USER_PASSWORD" | chpasswd
 
 # Add the user to additional groups
 msg "Adding $TARGET_USERNAME to audio, video, render, input, storage, and games groups..."
