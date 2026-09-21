@@ -191,7 +191,6 @@ install_system() {
         install -Dm644 "$config" /mnt/root/pacman-cachyos.conf
     fi
     setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
-    msg 'Configuring installed system'
 
     msg 'Configuring installed system'
 
@@ -292,8 +291,7 @@ main() {
 
     # Validate settings
     validate_settings
-    ROOT_PASSWORD=$(password 'Root password')
-    USER_PASSWORD=$(password "Password for $USERNAME")
+    get_passwords
 
     # Disk setup
     if [[ $mode == automatic ]]; then
