@@ -193,19 +193,21 @@ install_system() {
     setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
     msg 'Configuring installed system'
 
-msg 'Configuring installed system'
-arch-chroot /mnt /usr/bin/env \
-    "TARGET_HOSTNAME=$HOSTNAME" \
-    "TARGET_TIMEZONE=$TIMEZONE" \
-    "TARGET_LOCALE=$LOCALE" \
-    "TARGET_SECONDARY_LOCALE=$SECONDARY_LOCALE" \
-    "TARGET_DESKTOP=$DESKTOP" \
-    "TARGET_USERNAME=$USERNAME" \
-    "TARGET_ROOT_PASSWORD=$ROOT_PASSWORD" \
-    "TARGET_USER_PASSWORD=$USER_PASSWORD" \
-    "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" \
-    "SCRIPT_NAME=$(basename "$setup")" \
-    /root/configure-system
+    msg 'Configuring installed system'
+
+    arch-chroot /mnt /usr/bin/env \
+        "TARGET_HOSTNAME=$HOSTNAME" \
+        "TARGET_TIMEZONE=$TIMEZONE" \
+        "TARGET_LOCALE=$LOCALE" \
+        "TARGET_SECONDARY_LOCALE=$SECONDARY_LOCALE" \
+        "TARGET_DESKTOP=$DESKTOP" \
+        "TARGET_USERNAME=$USERNAME" \
+        "TARGET_ROOT_PASSWORD=$ROOT_PASSWORD" \
+        "TARGET_USER_PASSWORD=$USER_PASSWORD" \
+        "TARGET_CACHYOS_REPOS=$CACHYOS_REPOS" \
+        "SCRIPT_NAME=$(basename "$setup")" \
+        /root/configure-system
+}
 
 main() {
     # Ensure the script is run as root
