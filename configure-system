@@ -48,16 +48,23 @@ esac
 
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     msg 'Adding CachyOS repositories'
+
     pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key F3B607488DB35A47
+
     pacman -U --needed --noconfirm \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
-        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst'
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
+        'https://mirror.cachyos.org/repo/x86_64/cachyos/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
+
     install -Dm644 /root/pacman-cachyos.conf /etc/pacman.conf
     rm -f /root/pacman-cachyos.conf
-    pacman -Syu --needed --noconfirm linux-cachyos linux-cachyos-headers
+
+    pacman -Syyu --needed --noconfirm
+
+    pacman -S --needed --noconfirm linux-cachyos linux-cachyos-headers
 fi
 
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then
@@ -84,15 +91,6 @@ useradd --create-home --groups wheel --shell /usr/bin/bash "$TARGET_USERNAME"
 msg "Setting the password for $TARGET_USERNAME..."
 printf '%s:%s\n' "$TARGET_USERNAME" "$TARGET_USER_PASSWORD" | chpasswd
 
-# Add the user to additional groups
-msg "Adding $TARGET_USERNAME to audio, video, render, input, storage, and games groups..."
-groups_to_add=("audio" "video" "render" "input" "storage" "games")
-for group in "${groups_to_add[@]}"; do
-    if getent group "$group" >/dev/null; then
-        usermod -aG "$group" "$TARGET_USERNAME"
-    fi
-done
-
 # Configure sudo permissions for the wheel group
 msg 'Configuring sudo permissions'
 sudo_config="%wheel ALL=(ALL:ALL) ALL"
@@ -110,3 +108,12 @@ case "$TARGET_DESKTOP" in
     gnome) systemctl enable gdm.service ;;
     kde) systemctl enable plasmalogin.service ;;
 esac
+
+# Add the user to additional groups
+msg "Adding $TARGET_USERNAME to audio, video, render, input, storage, and games groups..."
+groups_to_add=("audio" "video" "render" "input" "storage" "games")
+for group in "${groups_to_add[@]}"; do
+    if getent group "$group" >/dev/null; then
+        usermod -aG "$group" "$TARGET_USERNAME"
+    fi
+done
