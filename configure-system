@@ -7,6 +7,20 @@ IFS=$'\n\t'
 required=(TARGET_HOSTNAME TARGET_TIMEZONE TARGET_LOCALE TARGET_SECONDARY_LOCALE TARGET_DESKTOP TARGET_USERNAME TARGET_ROOT_PASSWORD TARGET_USER_PASSWORD TARGET_CACHYOS_REPOS)
 for variable in "${required[@]}"; do [[ -n ${!variable:-} ]] || { echo "Missing configuration: $variable" >&2; exit 1; }; done
 
+TARGET_CACHYOS_REPOS=${TARGET_CACHYOS_REPOS,,}
+TARGET_DESKTOP=${TARGET_DESKTOP,,}
+
+[[ $TARGET_CACHYOS_REPOS == yes || $TARGET_CACHYOS_REPOS == no ]] || {
+    echo 'TARGET_CACHYOS_REPOS must be yes or no.' >&2
+    exit 1
+}
+
+case "$TARGET_DESKTOP" in
+    gnome) DESKTOP_PACKAGE=SteavenLinux-gnome-meta ;;
+    kde) DESKTOP_PACKAGE=SteavenLinux-plasma-meta ;;
+    *) echo 'TARGET_DESKTOP must be GNOME or KDE.' >&2; exit 1 ;;
+esac
+
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key F3B607488DB35A47
@@ -18,7 +32,9 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     install -Dm644 /root/pacman-cachyos.conf /etc/pacman.conf
     rm -f /root/pacman-cachyos.conf
     pacman -Syu --needed --noconfirm linux-cachyos linux-cachyos-headers
-else
+fi
+
+if [[ $TARGET_CACHYOS_REPOS == no ]]; then
     pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
 fi
 
@@ -38,11 +54,13 @@ install -Dm440 /dev/stdin /etc/sudoers.d/10-wheel <<'EOF'
 EOF
 visudo -cf /etc/sudoers.d/10-wheel
 
-pacman -Syu --needed --noconfirm grub efibootmgr networkmanager "$TARGET_DESKTOP" librewolf
+pacman -Syu --needed --noconfirm grub efibootmgr networkmanager flatpak "$DESKTOP_PACKAGE"
+flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+flatpak install --system --noninteractive flathub io.gitlab.librewolf-community
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable NetworkManager
 case "$TARGET_DESKTOP" in
-    SteavenLinux-gnome-meta) systemctl enable gdm.service ;;
-    SteavenLinux-plasma-meta) systemctl enable plasmalogin.service ;;
+    gnome) systemctl enable gdm.service ;;
+    kde) systemctl enable plasmalogin.service ;;
 esac

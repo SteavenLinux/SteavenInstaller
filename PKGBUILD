@@ -1,6 +1,6 @@
 # Maintainer: omarhanykasban <omarhanykasban706@gmail.com>
 
-pkgname=SteavenInstaller
+pkgname=SteavenLinuxInstaller
 pkgver=1.0.0
 pkgrel=1
 pkgdesc="SteavenGamerYT's SteavenLinux's Installer"

@@ -5,7 +5,7 @@ IFS=$'\n\t'
 umask 077
 
 readonly DEFAULT_HOSTNAME=SteavenLinux DEFAULT_TIMEZONE=Africa/Cairo DEFAULT_LOCALE=en_US.UTF-8
-readonly DEFAULT_SECONDARY_LOCALE=ar_EG.UTF-8 DEFAULT_DESKTOP=SteavenLinux-gnome-meta DEFAULT_USERNAME=steavengameryt
+readonly DEFAULT_SECONDARY_LOCALE=ar_EG.UTF-8 DEFAULT_DESKTOP=gnome DEFAULT_USERNAME=steavengameryt
 ROOT_PASSWORD='' USER_PASSWORD=''
 
 msg() { printf '\n=== %s ===\n\n' "$1"; }
@@ -16,7 +16,7 @@ trap on_exit EXIT
 
 need() { command -v "$1" >/dev/null 2>&1 || die "Required command is missing: $1"; }
 prompt() { local value; read -r -p "$1 [$2]: " value; printf '%s\n' "${value:-$2}"; }
-yes_no() { local value; while true; do read -r -p "$1 [$2]: " value; case "${value:-$2}" in yes|y|YES|Y) echo yes; return;; no|n|NO|N) echo no; return;; *) warn 'Enter yes or no.';; esac; done; }
+yes_no() { local value; while true; do read -r -p "$1 [$2]: " value; case "${value:-$2}" in [Yy]|[Yy][Ee][Ss]) echo yes; return;; [Nn]|[Nn][Oo]) echo no; return;; *) warn 'Enter yes or no.';; esac; done; }
 partition_path() { [[ $1 =~ [0-9]$ ]] && printf '%sp%s\n' "$1" "$2" || printf '%s%s\n' "$1" "$2"; }
 
 asset() {
@@ -56,8 +56,8 @@ password() {
 choose_desktop() {
     local desktop
     while true; do
-        desktop=$(prompt 'Desktop (SteavenLinux-gnome-meta or SteavenLinux-plasma-meta)' "$DEFAULT_DESKTOP")
-        case $desktop in SteavenLinux-gnome-meta|SteavenLinux-plasma-meta) printf '%s\n' "$desktop"; return;; *) warn 'Choose GNOME or Plasma.';; esac
+        desktop=$(prompt 'Desktop (GNOME or KDE)' "$DEFAULT_DESKTOP")
+        case "${desktop,,}" in gnome) printf 'gnome\n'; return;; kde) printf 'kde\n'; return;; *) warn 'Choose GNOME or KDE.';; esac
     done
 }
 
@@ -91,7 +91,9 @@ verify_manual() {
 install_system() {
     local mirrorlist config setup
     msg 'Installing base system'
-    pacstrap -K /mnt base base-devel git sudo linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName
+    # Use the prepared live-environment keyring. -K would create a new target
+    # keyring that does not yet trust the required third-party repositories.
+    pacstrap /mnt base base-devel git sudo linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName
     mirrorlist=/etc/pacman.d/steavenrepo-mirrorlist
     [[ -f $mirrorlist ]] || die 'The SteavenLinux mirror list is missing from the live environment.'
     install -Dm644 "$mirrorlist" /mnt/etc/pacman.d/steavenrepo-mirrorlist
@@ -111,11 +113,23 @@ install_system() {
 main() {
     (( EUID == 0 )) || die 'Run this installer as root.'
     [[ -d /sys/firmware/efi/efivars ]] || die 'Boot the live environment in UEFI mode.'
-    for command in arch-chroot curl findmnt genfstab lsblk mkfs.ext4 mkfs.fat mount mountpoint pacman-key pacstrap parted partprobe readlink systemctl timedatectl udevadm; do need "$command"; done
+    for command in arch-chroot curl findmnt genfstab lsblk mkfs.ext4 mkfs.fat mount mountpoint pacman pacman-key pacstrap parted partprobe readlink systemctl timedatectl udevadm; do need "$command"; done
     msg 'Checking internet connection'
     local attempt; for ((attempt=1; attempt<=30; attempt++)); do curl -fsS --max-time 5 https://archlinux.org/ >/dev/null && break; sleep 2; done
     (( attempt <= 30 )) || die 'No internet connection after 60 seconds.'
-    pacman-key --init; pacman-key --populate archlinux; timedatectl set-ntp true
+    timedatectl set-ntp true
+    msg 'Preparing trusted package keyrings'
+    pacman-key --init
+    pacman-key --populate archlinux
+    pacman -Sy --needed --noconfirm archlinux-keyring
+    pacman-key --populate archlinux
+    pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA  --keyserver keyserver.ubuntu.com
+    pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
+    pacman-key --recv-keys 3056513887B78AEB --keyserver keyserver.ubuntu.com
+    pacman-key --lsign-key 3056513887B78AEB
+    pacman -U --needed --noconfirm \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
+        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
     local mode; mode=$(prompt 'Disk setup: automatic or manual' automatic)
     case $mode in automatic|auto) echo 'Available disks:'; lsblk -d -o NAME,SIZE,MODEL,TYPE; DISK=$(validate_disk "$(prompt 'Target disk' /dev/sda)"); mode=automatic;; manual) mode=manual;; *) die 'Choose automatic or manual.';; esac
     HOSTNAME=$(prompt Hostname "$DEFAULT_HOSTNAME"); TIMEZONE=$(prompt Timezone "$DEFAULT_TIMEZONE")
