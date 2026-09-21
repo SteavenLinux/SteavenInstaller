@@ -282,5 +282,3 @@ main() {
     echo 'Exit the live environment, unmount /mnt, and reboot when ready.'
 }
 main "$@"
-
-readonly DEFAULT_SECONDARY_LOCALE="ar_EG.UTF-
