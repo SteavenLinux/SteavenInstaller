@@ -138,7 +138,7 @@ visudo -cf /etc/sudoers.d/10-wheel
 msg 'Installing necessary packages'
 pacman -Syu --needed --noconfirm grub efibootmgr networkmanager flatpak "$DESKTOP_PACKAGE"
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
-flatpak install --system --noninteractive flathub io.gitlab.librewolf-community
+#flatpak install --system --noninteractive flathub io.gitlab.librewolf-community
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
 grub-mkconfig -o /boot/grub/grub.cfg
 systemctl enable NetworkManager
