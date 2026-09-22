@@ -2,7 +2,6 @@
 # Run from an Arch Linux live environment booted in UEFI mode.
 set -Eeuo pipefail
 IFS=$'\n\t'
-umask 077
 
 # Define default system settings
 readonly DEFAULT_HOSTNAME="SteavenLinux"
