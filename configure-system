@@ -70,6 +70,7 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
 
+    rm -rf /etc/pacman.conf
     install -Dm644 \
         /usr/share/steaveninstaller/pacman-cachyos.conf \
         /etc/pacman.conf
@@ -94,6 +95,11 @@ if [[ $TARGET_CACHYOS_REPOS == no ]]; then
     pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA \
         --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
+
+    rm -rf /etc/pacman.conf
+    install -Dm644 \
+        /usr/share/steaveninstaller/pacman-arch.conf \
+        /etc/pacman.conf
 
      msg 'Installing Zen kernel'
     pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
