@@ -47,6 +47,12 @@ case "$TARGET_DESKTOP" in
 esac
 
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
+
+    msg 'Adding SteavenRepo Keys'
+    pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA \
+        --keyserver keyserver.ubuntu.com
+    pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
+
     msg 'Adding CachyOS repositories'
 
     pacman-key --init
@@ -84,6 +90,12 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
 fi
 
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then
+    msg 'Adding SteavenRepo Keys'
+    pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA \
+        --keyserver keyserver.ubuntu.com
+    pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
+
+     msg 'Installing Zen kernel'
     pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
 fi
 
