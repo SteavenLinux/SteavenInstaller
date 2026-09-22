@@ -48,6 +48,9 @@ esac
 
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
 
+    pacman-key --init
+    pacman-key --populate archlinux
+
     msg 'Adding SteavenRepo Keys'
     pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA \
         --keyserver keyserver.ubuntu.com
@@ -55,13 +58,12 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
 
     msg 'Adding CachyOS repositories'
 
-    pacman-key --init
-    pacman-key --populate archlinux
-
     pacman-key --recv-keys F3B607488DB35A47 \
         --keyserver keyserver.ubuntu.com
 
     pacman-key --lsign-key F3B607488DB35A47
+
+    chmod 777 -R /var/cache/pacman
 
     pacman -U --needed --noconfirm \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
@@ -90,13 +92,21 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
 fi
 
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then
+
+    pacman-key --init
+    pacman-key --populate archlinux
+
     msg 'Adding SteavenRepo Keys'
     pacman-key --recv-keys 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA \
         --keyserver keyserver.ubuntu.com
     pacman-key --lsign-key 5D47A0A4882E9619CCF7D0A57FD4F55D1E0AA9CA
 
-     msg 'Installing Zen kernel'
-    pacman -Syu --needed --noconfirm linux-zen linux-zen-headers
+    chmod 777 -R /var/cache/pacman
+
+    msg 'Installing Zen kernel'
+    pacman -S --needed --noconfirm \
+        linux-zen \
+        linux-zen-headers
 fi
 
 msg 'Setting timezone and locale'
