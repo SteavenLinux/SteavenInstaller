@@ -165,12 +165,29 @@ prepare_automatic() {
 
 verify_manual() {
     msg 'Manual disk setup'
+
     echo 'Prepare root at /mnt and the EFI System Partition at /mnt/boot.'
     echo 'Manual mode never partitions, formats, mounts, or unmounts a filesystem.'
-    read -r -p 'Press Enter after the filesystems are ready.'
-    mountpoint -q /mnt || die '/mnt is not mounted.'; mountpoint -q /mnt/boot || die '/mnt/boot is not mounted.'
-    findmnt /mnt /mnt/boot
-    [[ $(yes_no 'Continue with these mounted filesystems?' no) == yes ]] || die 'Installation cancelled.'
+    echo
+
+    printf 'Press Enter after the filesystems are ready... '
+    read -r
+
+    echo
+    echo 'Checking /mnt...'
+    mountpoint -q /mnt || die '/mnt is not mounted.'
+    echo '/mnt: OK'
+
+    echo 'Checking /mnt/boot...'
+    mountpoint -q /mnt/boot || die '/mnt/boot is not mounted.'
+    echo '/mnt/boot: OK'
+
+    echo
+    findmnt /mnt
+    findmnt /mnt/boot
+
+    [[ $(yes_no 'Continue with these mounted filesystems?' no) == yes ]] ||
+        die 'Installation cancelled.'
 }
 
 install_system() {
