@@ -188,6 +188,16 @@ install_system() {
     if [[ $CACHYOS_REPOS == yes ]]; then
         config=$(asset pacman-cachyos.conf)
         install -Dm644 "$config" /mnt/root/pacman-cachyos.conf
+        keyring=$(asset pkgs/cachyos-keyring-20240331-1-any.pkg.tar.zst)
+        install -Dm644 "$keyring" /mnt/root/pkgs/cachyos-keyring-20240331-1-any.pkg.tar.zst
+        mirrorlist=$(asset pkgs/cachyos-mirrorlist-27-1-any.pkg.tar.zst)
+        install -Dm644 "$mirrorlist" /mnt/root/pkgs/cachyos-mirrorlist-27-1-any.pkg.tar.zst
+        mirrorlist-v3=$(asset pkgs/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst)
+        install -Dm644 "$mirrorlist-v3" /mnt/root/pkgs/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst
+        mirrorlist-v4=$(asset pkgs/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst)
+        install -Dm644 "$mirrorlist-v4" /mnt/root/pkgs/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst
+        pacman-cachyos=$(asset pkgs/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst)
+        install -Dm644 "$pacman-cachyos" /mnt/root/pkgs/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst
     fi
     setup=$(asset configure-system); install -Dm700 "$setup" /mnt/root/configure-system
 
@@ -262,8 +272,8 @@ main() {
     pacman-key --lsign-key 3056513887B78AEB
     pacman -Sy --needed --noconfirm archlinux-keyring
     pacman -U --needed --noconfirm \
-        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' \
-        'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
+        '/usr/share/steaveninstaller/pkgs/chaotic-keyring-20251028-1-any.pkg.tar.zst' \
+        '/usr/share/steaveninstaller/pkgs/chaotic-mirrorlist-20260428-1-any.pkg.tar.zst'
 
     # Choose disk setup mode
     local mode
