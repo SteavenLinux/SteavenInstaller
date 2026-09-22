@@ -66,14 +66,14 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     chmod 777 -R /var/cache/pacman
 
     pacman -U --needed --noconfirm \
-        '/mnt/root/pkgs/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
-        '/mnt/root/pkgs/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
-        '/mnt/root/pkgs/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
-        '/mnt/root/pkgs/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
-        '/mnt/root/pkgs/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
+        'root/pkgs/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
+        '/root/pkgs/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
+        '/root/pkgs/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
+        '/root/pkgs/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
+        '/root/pkgs/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
 
     install -Dm644 \
-        /mnt/root/pacman-cachyos.conf \
+        /root/pacman-cachyos.conf \
         /etc/pacman.conf
 
     msg 'Synchronizing CachyOS repositories'
