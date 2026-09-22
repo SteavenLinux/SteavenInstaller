@@ -49,33 +49,38 @@ esac
 if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     msg 'Adding CachyOS repositories'
 
-    pacman -Syu --needed --noconfirm wget
+    pacman-key --init
+    pacman-key --populate archlinux
 
-    pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com
+    pacman-key --recv-keys F3B607488DB35A47 \
+        --keyserver keyserver.ubuntu.com
+
     pacman-key --lsign-key F3B607488DB35A47
 
-    install -d -m755 /var/cache/pacman/pkg
-
-    wget -P /var/cache/pacman/pkg \
+    pacman -U --needed --noconfirm \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-keyring-20240331-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst' \
         'https://mirror.cachyos.org/repo/x86_64/cachyos/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst'
 
-    pacman -U --noconfirm \
-        /var/cache/pacman/pkg/cachyos-keyring-20240331-1-any.pkg.tar.zst \
-        /var/cache/pacman/pkg/cachyos-mirrorlist-27-1-any.pkg.tar.zst \
-        /var/cache/pacman/pkg/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst \
-        /var/cache/pacman/pkg/cachyos-v4-mirrorlist-27-1-any.pkg.tar.zst \
-        /var/cache/pacman/pkg/pacman-7.1.0.r9.g54d9411-4-x86_64.pkg.tar.zst
-
     install -Dm644 \
         /usr/share/steaveninstaller/pacman-cachyos.conf \
         /etc/pacman.conf
 
-    pacman -Syyu --needed --noconfirm
-    pacman -S --needed --noconfirm linux-cachyos linux-cachyos-headers
+    msg 'Synchronizing CachyOS repositories'
+
+    pacman -Syy
+
+    msg 'Updating system with CachyOS repositories'
+
+    pacman -Syu --needed --noconfirm
+
+    msg 'Installing CachyOS kernel'
+
+    pacman -S --needed --noconfirm \
+        linux-cachyos \
+        linux-cachyos-headers
 fi
 
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then

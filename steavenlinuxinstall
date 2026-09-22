@@ -179,7 +179,7 @@ install_system() {
     msg 'Installing base system'
     # Use the prepared live-environment keyring. -K would create a new target
     # keyring that does not yet trust the required third-party repositories.
-    pacstrap /mnt base base-devel git sudo linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName
+    pacstrap -P -K /mnt base base-devel git sudo linux-firmware efibootmgr plymouth flatpak mkinitcpio networkmanager chaotic-mirrorlist chaotic-keyring SteavenSettings SteavenLinuxName
     mirrorlist=/etc/pacman.d/steavenrepo-mirrorlist
     [[ -f $mirrorlist ]] || die 'The SteavenLinux mirror list is missing from the live environment.'
     install -Dm644 "$mirrorlist" /mnt/etc/pacman.d/steavenrepo-mirrorlist
