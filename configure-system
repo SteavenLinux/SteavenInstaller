@@ -89,6 +89,22 @@ if [[ $TARGET_CACHYOS_REPOS == yes ]]; then
     pacman -S --needed --noconfirm \
         linux-cachyos \
         linux-cachyos-headers
+
+    msg 'Installing Systemd-Boot'
+
+    bootctl --esp-path=/boot install
+        cat > /boot/loader/loader.conf <<'EOF'
+        default steavenlinux-linux-cachyos.conf
+        timeout 5
+        editor no
+EOF
+    ROOT_UUID=$(findmnt -no UUID /)
+    cat > /boot/loader/entries/steavenlinux-linux-cachyos.conf <<EOF
+        title   SteavenLinux (Linux-Cachyos)
+        linux   /vmlinuz-linux-cachyos
+        initrd  /initramfs-linux-cachyos.img
+        options root=UUID=$ROOT_UUID rw
+EOF
 fi
 
 if [[ $TARGET_CACHYOS_REPOS == no ]]; then
@@ -107,6 +123,22 @@ if [[ $TARGET_CACHYOS_REPOS == no ]]; then
     pacman -S --needed --noconfirm \
         linux-zen \
         linux-zen-headers
+
+    msg 'Installing Systemd-Boot'
+
+    bootctl --esp-path=/boot install
+        cat > /boot/loader/loader.conf <<'EOF'
+        default steavenlinux-linux-zen.conf
+        timeout 5
+        editor no
+EOF
+    ROOT_UUID=$(findmnt -no UUID /)
+    cat > /boot/loader/entries/steavenlinux-linux-zen.conf <<EOF
+        title   SteavenLinux (Linux-Zen)
+        linux   /vmlinuz-linux-zen
+        initrd  /initramfs-linux-zen.img
+        options root=UUID=$ROOT_UUID rw
+EOF
 fi
 
 msg 'Setting timezone and locale'
@@ -136,11 +168,10 @@ echo "$sudo_config" > /etc/sudoers.d/10-wheel
 visudo -cf /etc/sudoers.d/10-wheel
 
 msg 'Installing necessary packages'
-pacman -Syu --needed --noconfirm grub efibootmgr networkmanager flatpak "$DESKTOP_PACKAGE"
+pacman -Syu --needed --noconfirm efibootmgr networkmanager flatpak "$DESKTOP_PACKAGE"
 flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 #flatpak install --system --noninteractive flathub io.gitlab.librewolf-community
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB
-grub-mkconfig -o /boot/grub/grub.cfg
+
 systemctl enable NetworkManager
 case "$TARGET_DESKTOP" in
     gnome) systemctl enable gdm.service ;;
